@@ -11,6 +11,9 @@
 #include "PlayerGrabberComponent.generated.h" // ten include musi byc na koncu
 
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FGrabbedItemUpdated);
+
+
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class LABA4EDITION_FIRST_API UPlayerGrabberComponent : public UActorComponent
 {
@@ -27,6 +30,12 @@ protected:
 public:	
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
+	UFUNCTION(BlueprintCallable)
+	AActor* GetGrabbedActor() const;
+
+	UPROPERTY(BlueprintAssignable)
+	FGrabbedItemUpdated ItemUpdated;
 
 protected:
 	void Use();
