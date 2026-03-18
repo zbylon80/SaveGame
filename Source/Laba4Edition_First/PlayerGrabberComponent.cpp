@@ -94,7 +94,10 @@ void UPlayerGrabberComponent::Grab()
 	End = Start + CameraRotation.Vector() * GrabRange;
 
 	FHitResult Result;
-	GetWorld()->LineTraceSingleByChannel(Result, Start, End, ECollisionChannel::ECC_Visibility);
+	FCollisionQueryParams Params;
+	Params.AddIgnoredSourceObject(GetOwner());
+
+	GetWorld()->LineTraceSingleByChannel(Result, Start, End, ECollisionChannel::ECC_PhysicsBody, Params);
 
 	//DrawDebugLine(GetWorld(), Start, End, FColor::Cyan, false, 5.0f, 0, 5.0f);
 
@@ -104,7 +107,7 @@ void UPlayerGrabberComponent::Grab()
 
 		if (PhysicsHandle)
 		{
-			PhysicsHandle->GrabComponentAtLocationWithRotation(PC, NAME_None, Result.Location, CameraRotation);
+			PhysicsHandle->GrabComponentAtLocationWithRotation(PC, Result.BoneName, Result.Location, CameraRotation);
 		}
 	}
 }
