@@ -40,6 +40,9 @@ public:
 	bool SaveCurrentLevelToSlot();
 
 	UFUNCTION(BlueprintCallable, Category = "Save")
+	bool SaveCurrentPlayerLocation();
+
+	UFUNCTION(BlueprintCallable, Category = "Save")
 	FString GetSavedLevelName();
 
 	UFUNCTION(BlueprintCallable, Category = "Save")
@@ -54,13 +57,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Save")
 	bool UpdateSavedUnlockedLevelOnSaveObject(UShooterSaveGame* SaveGameObject, int32 UnlockedLevel);
 
+	UFUNCTION(BlueprintCallable, Category = "Save")
+	bool UpdateSavedPlayerLocationOnSaveObject(UShooterSaveGame* SaveGameObject);
+
 private:
 	void HandlePostLoadMap(UWorld* LoadedWorld);
 	void RestoreGameplayInput(UWorld* LoadedWorld);
+	void TryRestoreSavedPlayerLocation(UWorld* LoadedWorld, int32 RemainingAttempts);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UShooterSaveGame> CurrentSaveGame = nullptr;
 
 	bool bRestoreGameplayInputAfterLevelLoad = false;
+	bool bRestoreSavedPlayerLocationAfterLevelLoad = false;
 	FDelegateHandle PostLoadMapHandle;
 };

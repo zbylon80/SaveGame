@@ -20,4 +20,13 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Save")
 	int32 SavedUnlockedLevel = 1;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Save")
+	FVector SavedPlayerLocation = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Save")
+	FRotator SavedPlayerRotation = FRotator::ZeroRotator;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Save")
+	bool bHasSavedPlayerLocation = false;
 };

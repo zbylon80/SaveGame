@@ -1,8 +1,11 @@
 #include "ShooterGameInstance.h"
 
+#include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "ShooterSaveGame.h"
+#include "TimerManager.h"
+#include "Engine/World.h"
 #include "UObject/UObjectGlobals.h"
 
 void UShooterGameInstance::Init()
@@ -83,7 +86,17 @@ bool UShooterGameInstance::SaveCurrentLevelToSlot()
 		return false;
 	}
 
+	if (!UpdateSavedPlayerLocationOnSaveObject(SaveGame))
+	{
+		return false;
+	}
+
 	return SaveCurrentGame();
+}
+
+bool UShooterGameInstance::SaveCurrentPlayerLocation()
+{
+	return UpdateSavedPlayerLocationOnSaveObject(GetOrCreateSaveGame());
 }
 
 FString UShooterGameInstance::GetSavedLevelName()
@@ -117,6 +130,7 @@ bool UShooterGameInstance::OpenSavedLevel()
 	}
 
 	bRestoreGameplayInputAfterLevelLoad = true;
+	bRestoreSavedPlayerLocationAfterLevelLoad = SaveGame->bHasSavedPlayerLocation;
 	UGameplayStatics::OpenLevel(this, SaveGame->SavedLevelName);
 	return true;
 }
@@ -146,15 +160,47 @@ bool UShooterGameInstance::UpdateSavedUnlockedLevelOnSaveObject(UShooterSaveGame
 	return true;
 }
 
-void UShooterGameInstance::HandlePostLoadMap(UWorld* LoadedWorld)
+bool UShooterGameInstance::UpdateSavedPlayerLocationOnSaveObject(UShooterSaveGame* SaveGameObject)
 {
-	if (!bRestoreGameplayInputAfterLevelLoad)
+	if (!SaveGameObject)
 	{
-		return;
+		return false;
 	}
 
-	bRestoreGameplayInputAfterLevelLoad = false;
-	RestoreGameplayInput(LoadedWorld);
+	APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(this, 0);
+	if (!PlayerPawn)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Could not save player location because PlayerPawn was not found."));
+		return false;
+	}
+
+	SaveGameObject->SavedPlayerLocation = PlayerPawn->GetActorLocation();
+	if (APlayerController* PlayerController = UGameplayStatics::GetPlayerController(this, 0))
+	{
+		SaveGameObject->SavedPlayerRotation = PlayerController->GetControlRotation();
+	}
+	else
+	{
+		SaveGameObject->SavedPlayerRotation = PlayerPawn->GetActorRotation();
+	}
+
+	SaveGameObject->bHasSavedPlayerLocation = true;
+	CurrentSaveGame = SaveGameObject;
+	return true;
+}
+
+void UShooterGameInstance::HandlePostLoadMap(UWorld* LoadedWorld)
+{
+	if (bRestoreGameplayInputAfterLevelLoad)
+	{
+		bRestoreGameplayInputAfterLevelLoad = false;
+		RestoreGameplayInput(LoadedWorld);
+	}
+
+	if (bRestoreSavedPlayerLocationAfterLevelLoad)
+	{
+		TryRestoreSavedPlayerLocation(LoadedWorld, 10);
+	}
 }
 
 void UShooterGameInstance::RestoreGameplayInput(UWorld* LoadedWorld)
@@ -176,5 +222,53 @@ void UShooterGameInstance::RestoreGameplayInput(UWorld* LoadedWorld)
 	PlayerController->bShowMouseCursor = false;
 	PlayerController->SetIgnoreMoveInput(false);
 	PlayerController->SetIgnoreLookInput(false);
+}
+
+void UShooterGameInstance::TryRestoreSavedPlayerLocation(UWorld* LoadedWorld, int32 RemainingAttempts)
+{
+	if (!bRestoreSavedPlayerLocationAfterLevelLoad || !LoadedWorld)
+	{
+		return;
+	}
+
+	UShooterSaveGame* SaveGame = GetOrCreateSaveGame();
+	if (!SaveGame || !SaveGame->bHasSavedPlayerLocation)
+	{
+		bRestoreSavedPlayerLocationAfterLevelLoad = false;
+		return;
+	}
+
+	const FString CurrentLevelName = UGameplayStatics::GetCurrentLevelName(LoadedWorld, true);
+	if (SaveGame->SavedLevelName != FName(*CurrentLevelName))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Skipping player location restore because the loaded level does not match the saved level."));
+		bRestoreSavedPlayerLocationAfterLevelLoad = false;
+		return;
+	}
+
+	APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(LoadedWorld, 0);
+	if (!PlayerPawn)
+	{
+		if (RemainingAttempts > 0)
+		{
+			FTimerDelegate RetryDelegate = FTimerDelegate::CreateUObject(this, &UShooterGameInstance::TryRestoreSavedPlayerLocation, LoadedWorld, RemainingAttempts - 1);
+			LoadedWorld->GetTimerManager().SetTimerForNextTick(RetryDelegate);
+			return;
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("Could not restore player location after loading level because PlayerPawn was not found."));
+		bRestoreSavedPlayerLocationAfterLevelLoad = false;
+		return;
+	}
+
+	PlayerPawn->SetActorLocation(SaveGame->SavedPlayerLocation, false, nullptr, ETeleportType::TeleportPhysics);
+	PlayerPawn->SetActorRotation(FRotator(0.f, SaveGame->SavedPlayerRotation.Yaw, 0.f), ETeleportType::TeleportPhysics);
+
+	if (APlayerController* PlayerController = UGameplayStatics::GetPlayerController(LoadedWorld, 0))
+	{
+		PlayerController->SetControlRotation(SaveGame->SavedPlayerRotation);
+	}
+
+	bRestoreSavedPlayerLocationAfterLevelLoad = false;
 }
 
